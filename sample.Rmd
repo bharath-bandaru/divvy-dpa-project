@@ -1,0 +1,79 @@
+---
+title: "test"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+
+```{r}
+# *** duplicate code for loading data
+install.packages("ggplot2",repos = "http://cran.us.r-project.org")
+install.packages("caret",repos = "http://cran.us.r-project.org")
+install.packages("sqldf",repos = "http://cran.us.r-project.org")
+install.packages("randomForest",repos = "http://cran.us.r-project.org")
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+# *** end of duplicate code for loading data
+
+
+start_df$is_holiday = as.numeric(start_df$is_holiday)
+start_df$day_of_week = as.numeric(start_df$day_of_week)
+start_df$season_num = as.numeric(start_df$season_num)
+start_df$year = as.numeric(start_df$year)
+summary(start_df)
+#tt <- as.numeric(tt)
+pca2= prcomp(start_df[c(3:18)], scale = TRUE, center = TRUE) 
+summary(pca2)
+screeplot(pca2,type = 'lines')
+biplot(pca2)
+
+smp_size <- floor(0.7 * nrow(start_df))
+split <- sample(seq_len(nrow(start_df)), size = smp_size)
+
+train <- start_df[split, ]
+test <- start_df[-split, ]
+## RF
+library(randomForest)
+
+rf <- randomForest(
+  num_of_trips ~ uvIndex+totalSnow_cm+tempC+windSpeedKmph+precipMM+humidity+visibilityKM+cloudcover+year,
+  data=train,na.action=na.exclude
+)
+head(test)$num_of_trips
+pred = predict(rf, newdata=head(test))
+pred
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

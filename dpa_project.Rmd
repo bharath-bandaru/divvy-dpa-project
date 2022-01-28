@@ -1,0 +1,29 @@
+---
+title: "dpa_project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+divy.data <- read.csv("Fin.csv", header=TRUE)
+summary(divy.data)
+part <- createDataPartition(divy.data$trip_duration,p=0.8,list=FALSE)
+train <- divy.data[part,]
+test <- divy.data[-part,]
+
+```
+
+```{r}
+
+head(train)
+lm <- lm(birth_year~., data=train)
+```
+
+```{r}
+rm(list = ls())
+```
+

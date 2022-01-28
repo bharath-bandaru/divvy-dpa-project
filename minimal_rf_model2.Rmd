@@ -1,0 +1,141 @@
+---
+title: "Public Bike Share Data Analysis"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("corrplot", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(randomForest)
+library(fastDummies)
+library(caret)
+library(rpart) #recursive and partitioning trees
+library(plotly) #data visualization
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(RWeka)
+library(ROSE)
+library(tm)
+library(randomForest)
+library(tidytext)
+library(e1071)
+```
+
+
+#### NUMBER OF TRIPS GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+library(randomForest)
+library(fastDummies)
+options(scipen = 999)
+
+min_df <-  read.csv("minim_grouped_fin.csv",header=T)
+summary(min_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+min_df[as.factor.cols] <- lapply(min_df[as.factor.cols], factor)
+min_df = min_df[min_df$totalSnow_cm<15,]
+
+
+colSums(is.na(min_df))
+
+#min_df <- dummy_cols(min_df, select_columns = c("season_num", "year","is_holiday","day_of_week","month"), remove_selected_columns =TRUE)
+drops = c("k_date","FeelsLikeC","humididty","mintempC","visibilityKM","month","uvIndex","cloudcover","day","start_station_name")
+
+min_df = min_df[ , !(names(min_df) %in% drops)]
+
+```
+
+
+#### Split data to train and test 
+```{r}
+set.seed(123)
+train_ind <- createDataPartition(min_df$count,p = 0.8, list = FALSE)
+
+new_train <- min_df[train_ind, ]
+new_test <- min_df[-train_ind, ]
+head(new_test)
+summary(new_train)
+```
+
+### Data Modelling ###
+```{r}
+
+lm = lm(count~tempC+windSpeedKmph+day_of_week+year+precipMM+totalSnow_cm,data = new_train)
+
+lm
+summary(lm)
+plot(lm)
+predd = predict(lm,new_test)
+
+sqrt(mean((new_test$count - predd)^2))
+
+
+lm = lm(count~tempC+I(tempC^2)+precipMM+I(precipMM^2)+windSpeedKmph+I(windSpeedKmph^2)+
+           day_of_week+year,data = new_train)
+summary(lm)
+confint(lm)
+plot(lm)
+predict(lm,new_test[1,],interval = "confidence")
+predict(lm,new_test[1,],interval = "prediction")
+
+```
+
+
+```{r}
+rf <- randomForest(
+  count ~ .,
+  data=new_train
+)
+
+random.tree.model= rpart(
+count ~ .,
+data = new_train
+)
+head(new_test)
+predicted.tree <- predict(rf,newdata = new_test)
+predicted.tree
+random.tree.model
+accuracy.meas(new_test[1:10,]$label, predicted.tree[,2])
+rpart.plot(random.tree.model, main = "Random Forest Tree")
+rf
+new_test
+pred = predict(rf, newdata=new_test)
+
+
+sqrt(mean((new_test$count - predicted.tree)^2))
+
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

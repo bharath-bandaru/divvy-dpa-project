@@ -1,0 +1,108 @@
+---
+title: "Public Bike Share Data Analysis"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("corrplot", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(sqldf)
+library(fastDummies)
+```
+
+
+#### NUMBER OF TRIPS GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+summary(start_df)
+summary(end_df)
+```
+
+#### Split data to train and test 
+```{r}
+set.seed(123)
+train_ind <- createDataPartition(start_df$year,p = 0.7, list = FALSE)
+
+new_train <- start_df[train_ind, ]
+new_test <- start_df[-train_ind, ]
+
+str(new_train)
+
+#remove below code
+new_test = new_test[1:1000,]
+```
+
+#### GLM Model
+```{r}
+# GLM model
+glm_model <- glm(count~start_station_name+
+                    totalSnow_cm+tempC+windSpeedKmph+precipMM+
+                    humidity+visibilityKM+is_holiday+day_of_week+season_num+
+                    year+day+month,
+                  data = new_train)
+
+summary(glm_model)
+
+plot(glm_model)
+
+confint(glm_model)
+
+pred <- predict(glm_model, head(new_test), type="response")
+
+pred
+
+head(new_test)$count
+
+
+#pred <- predict(glm_model, new_test, type="response")
+
+#pred
+
+#new_test$count
+
+```
+
+```{r}
+
+
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

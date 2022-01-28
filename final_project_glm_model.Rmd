@@ -1,0 +1,108 @@
+---
+title: "Public Bike Share Data Analysis"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("corrplot", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(sqldf)
+library(fastDummies)
+```
+
+# Loading TRIP DURARION Dataset #
+
+```{r}
+divyydata <- read.csv("Divvy_processed.csv",sep=",",header=TRUE)
+summary(divyydata)
+str(divyydata)
+# converting data to numeric
+divyydata$trip_duration <- as.numeric(divyydata$trip_duration)
+# removing columns containing NA's
+divyydata <- divyydata[complete.cases(divyydata), ] 
+
+divyydata <- divyydata[!(divyydata$trip_duration > 20000),]
+# splitting date and creating year
+years <- str_split_fixed(divyydata$k_date, "-", 3)
+divyydata$year <- as.factor(years[,3])
+
+unique(divyydata$year)
+rm(years)
+#converting columns to factors
+as.factor.cols <- c("start_station_name", "end_station_name", "k_time",
+          "time_of_day","season","is_holiday","day_of_week")
+divyydata[as.factor.cols] <- lapply(divyydata[as.factor.cols], factor)
+summary(divyydata)
+
+```
+
+#### Split data to train and test 
+```{r}
+set.seed(123)
+train_ind <- createDataPartition(divyydata$year,p = 0.0001, list = FALSE)
+
+new_train <- divyydata[train_ind, ]
+new_test <- divyydata[-train_ind, ]
+
+summary(new_train)
+
+#remove below code
+new_test = new_test[1:10000,]
+rm(divvy)
+divvy = divyydata
+divyydata = new_train
+```
+
+#### GLM Model
+```{r}
+# GLM model
+glm_model <- glm(trip_duration~start_station_name+
+                    end_station_name+maxtempC+mintempC+totalSnow_cm+uvIndex+
+                    h.tempC+h.windSpeedKmph+h.precipMM+h.humidity+h.visibilityKM+
+                    h.cloudcover+day_of_week+time_of_day+season+is_holiday,
+                  data = new_train)
+
+summary(glm_model)
+
+plot(glm_model)
+
+confint(glm_model)
+
+pred <- predict(glm_model, new_test, type="response")
+
+pred
+
+new_test$trip_duration
+
+```
+
+```{r}
+
+
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

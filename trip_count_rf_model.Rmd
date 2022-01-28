@@ -1,0 +1,95 @@
+---
+title: "Public Bike Share Data Analysis"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("corrplot", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(randomForest)
+library(fastDummies)
+```
+
+
+#### NUMBER OF TRIPS GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+library(randomForest)
+library(fastDummies)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+start_df = start_df[start_df$totalSnow_cm<15,]
+
+
+colSums(is.na(start_df))
+colSums(is.na(end_df))
+start_df <- dummy_cols(start_df, select_columns = c("season_num", "year","is_holiday","day_of_week","month"), remove_selected_columns =TRUE)
+drops = c("k_date","FeelsLikeC","humididty","visibilityKM","month","uvIndex","cloudcover","day","start_station_name")
+
+start_df = start_df[ , !(names(start_df) %in% drops)]
+
+names(start_df) <- make.names(names(start_df))
+```
+
+
+#### Split data to train and test 
+```{r}
+set.seed(123)
+train_ind <- createDataPartition(start_df$count,p = 0.7, list = FALSE)
+
+new_train <- start_df[train_ind, ]
+new_test <- start_df[-train_ind, ]
+summary(new_train)
+```
+
+### Data Modelling ###
+```{r}
+rf <- randomForest(
+  count ~ .,
+  data=new_train
+)
+
+head(new_test)$count
+pred = predict(rf, newdata=head(new_test))
+pred
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

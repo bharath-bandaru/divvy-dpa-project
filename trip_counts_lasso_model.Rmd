@@ -1,0 +1,123 @@
+---
+title: "Public Bike Share Data Analysis"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("fastDummies", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("glmnet", repos = "http://cran.us.r-project.org")
+install.packages("corrplot", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(sqldf)
+library(fastDummies)
+```
+
+
+#### NUMBER OF TRIPS GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+summary(start_df)
+summary(end_df)
+```
+
+
+#### Training model with glm and check relevant predictors
+```{r}
+## lasso to eliminate the predicates
+library(fastDummies)
+library(glmnet)
+
+train_ex <- dummy_cols(start_df, select_columns = c("season_num", "month","year","day_of_week","is_holiday"), remove_selected_columns =TRUE)
+drops = c("day")
+train_ex = train_ex[ , !(names(train_ex) %in% drops)]
+str(train_ex)
+
+# lasso inputs
+train_ex[c(4:48)]
+train_ex[c(4:48)] <- scale(train_ex[c(4:48)],center = F,scale = T)
+
+x <- data.matrix(train_ex[c(4:48)])
+y <- train_ex$count
+lasso_model <- cv.glmnet(x, y, alpha = 1)
+
+best_lambda <- lasso_model$lambda.min
+best_lambda
+plot(lasso_model) 
+
+library(corrplot)
+corrplot(cor(train_ex[c(10:30)]))
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(best_model)
+
+```
+
+#end df
+```{r}
+library(fastDummies)
+library(glmnet)
+
+train_ex <- dummy_cols(end_df, select_columns = c("season_num", "month","year","day_of_week","is_holiday"), remove_selected_columns =TRUE)
+drops = c("day")
+train_ex = train_ex[ , !(names(train_ex) %in% drops)]
+str(train_ex)
+
+# lasso inputs
+train_ex[c(4:48)]
+train_ex[c(4:48)] <- scale(train_ex[c(4:48)],center = F,scale = T)
+
+x <- data.matrix(train_ex[c(4:48)])
+y <- train_ex$count
+lasso_model <- cv.glmnet(x, y, alpha = 1)
+
+best_lambda <- lasso_model$lambda.min
+best_lambda
+plot(lasso_model) 
+
+library(corrplot)
+corrplot(cor(train_ex[c(10:30)]))
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(best_model)
+```
+
+```{r}
+
+
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

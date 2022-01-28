@@ -1,0 +1,452 @@
+---
+title: "Public Bike Share Data Analysis"
+author: "A20495939 - Jasleen Bhatia"
+author: "A20493607 - Bharath Bandaru"
+author: "A20491089  - Himamshu Lakkaraju"
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("caret", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(sqldf)
+
+```
+
+# Loading Dataset #
+
+```{r}
+divyydata <- read.csv("Divvy_processed.csv",sep=",",header=TRUE)
+# TODO summary(divyydata)
+str(divyydata)
+# converting data to numeric
+divyydata$trip_duration <- as.numeric(divyydata$trip_duration)
+colSums(is.na(divyydata))
+# removing columns containing NA's
+divyydata <- divyydata[complete.cases(divyydata), ] 
+divyydata <- divyydata[!(divyydata$trip_duration > 20000),]
+# splitting date and creating year
+years <- str_split_fixed(divyydata$k_date, "-", 3)
+divyydata$year <- as.factor(years[,3])
+rm(years)
+#converting columns to factors
+as.factor.cols <- c("start_station_name", "end_station_name", "k_time",
+          "time_of_day","season","is_holiday","day_of_week")
+divyydata[as.factor.cols] <- lapply(divyydata[as.factor.cols], factor)
+
+```
+
+```{r}
+smp_size <- floor(0.001 * nrow(divyydata))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(divyydata)), size = smp_size)
+
+new_train <- divyydata[train_ind, ]
+new_test <- divyydata[-train_ind, ]
+
+divyydata = new_train
+
+summary(divyydata)
+divyydata[1,]
+is.na(divyydata)
+```
+### Data Preprocessing ###
+Performing Data Sanity Checks before proceeding with analysis
+
+```{r}
+divyydata["Month"]<-format(as.Date(divyydata$k_date,format="%m-%d-%y"),"%m")
+head(divyydata,10)
+#Checking the shape of the dataset
+row=nrow(divyydata)
+col=ncol(divyydata)
+sprintf("The rows and colums are: %s %s",row,col)
+```
+
+```{r}
+#See whether missing values or not
+sapply(divyydata, function(x) sum(is.na(x)))
+```
+
+
+### Exploratory Data Analysis ###
+# Number of users over the years #
+
+```{r}
+divyydata$Month <- factor(divyydata$Month)
+ggplot()+
+  geom_bar(data=divyydata,mapping=aes(x=Month))+
+  scale_y_continuous(breaks = seq(0,1000000,100000),labels=scales::comma)+
+  labs(x="Month",
+       y="Number of Users")+
+  labs(title="Number of users over the years")+
+  theme(plot.title =element_text(hjust = 0.5,size=15), 
+        legend.position = c(.50, .50),
+        legend.justification = c("right", "top"),
+       axis.title = element_text(size=12),
+        axis.text = element_text(size=09))+
+  theme(plot.caption=element_text(size=10))
+```
+# Rideable type over the years #
+
+```{r}
+ggplot(data=divyydata)+geom_bar(mapping = aes(x=Month,fill=rideable_type))+
+  scale_y_continuous(breaks = seq(0,700000,100000),labels=scales::comma)+
+  labs(x="Month",
+       y="Number of rideable type",
+       fill="Rideable Type")+
+  labs(title="Change of usage on rideable types over the years",subtitle = "3 Types of Ride: Classic, Docked, Electric")+
+  theme(plot.title =element_text(hjust = 0.5,size=15), 
+        legend.position = c(.50, .50),
+        legend.justification = c("right", "top"),
+       axis.title = element_text(size=12),
+        axis.text = element_text(size=09))+
+  theme(plot.caption=element_text(size=10))
+```
+
+# Ride Length over the years #
+
+```{r}
+
+divyydata["ride_length"] = difftime(divyydata$ended_at,divyydata$started_at, units="mins")
+df<-sqldf("select avg(ride_length) as avg_ride,Month from divyydata group by Month")
+df$Month <- factor(df$Month)
+ggplot(data = df)+
+  geom_line(mapping = aes(x=Month,y=avg_ride,group = 1))+
+  labs(x="Month",y="Average ride length per minute")+
+  labs(title="Change of average ride length over the years")+
+    theme(plot.title =element_text(hjust = 0.5,size=15), 
+        legend.position = c(.50, .50),
+        legend.justification = c("right", "top"),
+       axis.title = element_text(size=12),
+        axis.text = element_text(size=09))+
+  theme(plot.caption=element_text(size=10))
+```
+#Top 20 most Popular Stations #
+
+```{r}
+trip_df<-sqldf("select start_station_name,end_station_name,(start_station_name|| ' to ' ||end_station_name) as station_name,count(ride_id) as number_of_trips from divyydata group by start_station_name,end_station_name order by count(ride_id) desc LIMIT 20")
+ggplot(data=trip_df,aes(x=number_of_trips, y=station_name))+geom_bar(stat='identity')+ 
+  labs(x="Number of Trips",y="Statiocn Name")+
+  labs(title=" Top 20 Popular Stations ")+
+  theme(plot.title =element_text(hjust = 0.5,size=15), 
+        legend.position = c(.50, .50),
+        legend.justification = c("right", "top"),
+       axis.title = element_text(size=12),
+        axis.text = element_text(size=09))+
+  theme(plot.caption=element_text(size=10))
+```
+
+
+```{r}
+divyydata_combined <- read.csv("/Users/jasleenkaurbhatia/Downloads/day.csv",sep=",",header=TRUE,quote="",stringsAsFactors=FALSE)
+divyydata_combined$actual_temp <- divyydata_combined$temp*41
+divyydata_combined$actual_feel_temp <- divyydata_combined$atemp*50
+divyydata_combined$actual_windspeed <- divyydata_combined$windspeed*67
+divyydata_combined$actual_humidity <- divyydata_combined$hum*100
+divyydata_combined$mean_acttemp_feeltemp <- (divyydata_combined$actual_temp+divyydata_combined$actual_feel_temp)/2
+str(divyydata_combined)
+h <- hist(divyydata_combined$cnt, breaks = 25, ylab = 'Frequency of Rental', xlab = 'Total Bike Rental Count', main = 'Distribution of Total Bike Rental Count', col = 'blue' )
+xfit <- seq(min(divyydata_combined$cnt),max(divyydata_combined$cnt), length = 50)
+yfit <- dnorm(xfit, mean =mean(divyydata_combined$cnt),sd=sd(divyydata_combined$cnt))
+yfit <- yfit*diff(h$mids[1:2])*length(divyydata_combined$cnt)
+lines(xfit,yfit, col='red', lwd= 3)
+```
+
+#### MAIN DATASET  PLOTS
+```{r}
+bk_ls = aggregate(x= divyydata$year,by= list(divyydata$bike_id),FUN=sum)
+
+## TRIP COUNTS
+
+#bike id graph
+bike_trips = divyydata %>% count(year,bike_id)
+yearList = unique(bike_trips$year)
+bike_trips = bike_trips[order(bike_trips$year,bike_trips$n, decreasing = T),]
+
+trip_df <- data.frame(filter(bike_trips,bike_trips$year==13)[1:5,])
+for(val in yearList[2:7]){
+  trip_df = rbind(trip_df,filter(bike_trips,bike_trips$year==val)[1:5,])
+}
+trip_df
+
+ggplot(data = trip_df, aes(x = n, y= bike_id, fill=year) )+
+  geom_bar(stat = "identity")
+
+rm(bike_trips)
+
+# holiday no of trips graph
+holiday_trip = divyydata %>% count(is_holiday,year)
+
+ggplot(data = holiday_trip, aes(x = year, y= n, fill=is_holiday) )+
+  geom_bar(stat = "identity")
+
+# holiday trip meaned graph
+holiday_trip_du = divyydata %>% count(is_holiday,k_date,year)
+
+meaned_holi = holiday_trip_du %>%
+    group_by(year,is_holiday) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_holi, aes(x = year, y= Mean, fill=is_holiday) )+
+  geom_bar(stat = "identity",position = position_dodge())
+
+# weekdays trip meaned graph
+weekday_df = divyydata %>% count(day_of_week,k_date,year)
+
+meaned_wd = weekday_df %>%
+    group_by(year,day_of_week) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_wd, aes(x = year, y= Mean, fill=day_of_week) )+
+  geom_bar(stat = "identity",position = position_dodge())
+
+# season graph
+season_df = divyydata %>% count(season,k_date,year)
+
+meaned_season = season_df %>%
+    group_by(year,season) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_season, aes(x = year, y= Mean, fill=season) )+
+  geom_bar(stat = "identity",position = position_dodge())
+
+# time graph
+time_df = divyydata %>% count(k_time,k_date,year)
+
+meaned_time = time_df %>%
+    group_by(year,k_time) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_time, aes(x = year, y= Mean, fill=k_time) )+
+  geom_bar(stat = "identity",position = position_dodge())
+
+## TRIP DURATION
+start_st = divyydata %>% count(start_station_name,year)
+
+
+```
+
+#### MAIN GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+
+colSums(is.na(start_df))
+colSums(is.na(end_df))
+```
+
+#### Plots
+```{r}
+# plot top stations based on START station
+start_top_stations = aggregate(x= start_df$num_of_trips,
+	          by= list(start_df$start_station_name),
+	          FUN=sum)
+start_top_stations = start_top_stations[order(start_top_stations$x,decreasing=T),]
+start_top_stations = start_top_stations[1:10,]
+
+ggplot(data=start_top_stations, aes(x=Group.1, y=x)) +
+  geom_bar(stat="identity")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5))
+
+rm(start_top_stations)
+# plot top stations based on END station
+end_top_stations = aggregate(x= end_df$count,
+	          by= list(end_df$end_station_name),
+	          FUN=sum)
+end_top_stations = end_top_stations[order(end_top_stations$x,decreasing=T),]
+end_top_stations = end_top_stations[1:10,]
+
+ggplot(data=end_top_stations, aes(x=Group.1, y=x)) +
+  geom_bar(stat="identity")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5))
+rm(end_top_stations)
+
+holiday = aggregate(x= end_df$count,
+	          by= list(end_df$is_holiday,end_df$end_station_name),
+	          FUN=sum)
+```
+
+
+```{r}
+lm_test<- lm(divyydata_combined$cnt~divyydata_combined$actual_temp)
+summary(lm_test)
+plot(lm_test, col = "green")
+
+```
+
+
+
+### Data Modelling ###
+
+
+# DATA 1
+#### Loading pre processed Data and factoring required columns 
+#### Split data to train and test 
+```{r}
+head(divyydata)
+set.seed(13)
+
+smp_size <- floor(0.01 * nrow(divyydata))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(divyydata)), size = smp_size)
+
+train <- divyydata[train_ind, ]
+test <- divyydata[-train_ind, ]
+
+summary(train)
+
+```
+
+#### Training model with glm and check relevant predictors
+```{r}
+## lasso to eliminate the predicates
+library(fastDummies)
+library(glmnet)
+sum(is.na(train$bike_id))
+train <- train[complete.cases(train), ]
+unique(train$season)
+train_ex <- dummy_cols(train, select_columns = c("time_of_day", "season","is_holiday","day_of_week","year"), remove_selected_columns =TRUE)
+str(train_ex)
+
+# lasso inputs
+train_ex[c(10:46)]
+train_ex[c(10:46)] <- scale(train_ex[c(10:46)],center = F,scale = T)
+
+x <- data.matrix(train_ex[c(10:46)])
+y <- train_ex$trip_duration
+lasso_model <- cv.glmnet(x, y, alpha = 1)
+
+best_lambda <- lasso_model$lambda.min
+best_lambda
+plot(lasso_model) 
+
+library(corrplot)
+cor(train_ex[c(10:30)])
+corrplot(cor(train_ex[c(10:30)]))
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(best_model)
+
+```
+
+#### GLM Model
+```{r}
+str(train)
+smp_size <- floor(0.1 * nrow(train))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(train)), size = smp_size)
+
+new_train <- train[train_ind, ]
+new_test <- train[-train_ind, ]
+# GLM model
+lmodel_fit <- glm(trip_duration~bike_id+trip_duration+start_station_name+
+                    end_station_name+maxtempC+mintempC+totalSnow_cm+uvIndex+
+                    h.tempC+h.windSpeedKmph+h.precipMM+h.humidity+h.visibilityKM+
+                    h.cloudcover+day_of_week+time_of_day+season+is_holiday,
+                  data = new_train)
+summary(lmodel_fit)
+plot(lmodel_fit)
+confint(lmodel_fit)
+pred <- predict(lmodel_fit, test)
+
+
+```
+
+# DATA 2
+```{r}
+# *** duplicate code for loading data
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+summary(start_df)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+# *** end of duplicate code for loading data
+
+
+start_df$is_holiday = as.numeric(start_df$is_holiday)
+start_df$day_of_week = as.numeric(start_df$day_of_week)
+start_df$season_num = as.numeric(start_df$season_num)
+start_df$year = as.numeric(start_df$year)
+summary(start_df)
+#tt <- as.numeric(tt)
+pca2= prcomp(start_df[c(3:18)], scale = TRUE, center = TRUE) 
+summary(pca2)
+screeplot(pca2,type = 'lines')
+biplot(pca2)
+
+
+
+#split <- createDataPartition(c(start_df$num_of_trips,start_df$start_station_name,start_df$day,start_df$year,start_df$season_num), p = 0.01, list = F)
+#training set
+#train <- start_df[split,]  
+#test set
+#test <- start_df[-split,]
+# GLM model
+lmodel_fit <- glm(num_of_trips~uvIndex+tempC+totalSnow_cm+
+                   mintempC +maxtempC+windSpeedKmph+precipMM+humidity+visibilityKM+
+                    cloudcover+is_holiday+day_of_week+season_num+start_station_name,data = train)
+summary(lmodel_fit)
+plot(lmodel_fit)
+confint(lmodel_fit)
+
+options(scipen = 999)
+predOut <- predict(lmodel_fit, test, type = "response")
+print(predOut)
+summary(train)
+sum(is.na(start_df$num_of_trips))
+smp_size <- floor(0.05 * nrow(start_df))
+split <- sample(seq_len(nrow(start_df)), size = smp_size)
+
+train <- start_df[split, ]
+test <- start_df[-split, ]
+## RF
+library(randomForest)
+
+rf <- randomForest(
+  num_of_trips ~ start_station_name+totalSnow_cm+tempC+windSpeedKmph+precipMM+visibilityKM+year+is_holiday+day_of_week,
+  data=train,na.action=na.exclude
+)
+head(test)$num_of_trips
+pred = predict(rf, newdata=head(test))
+pred
+```
+
+### Data Visualization ##
+```{r}
+
+```
+
+
+### Model Evaluation ###
+
+```{r}
+
+```
+
+
+```{r}
+rm(divyydata)
+```

@@ -1,0 +1,326 @@
+---
+title: "Public Bike Share Data Analysis"
+author: "A20495939 - Jasleen Bhatia, A20491089  - Himamshu Lakkaraju, A20493607 - Bharath Bandaru"
+output: html_document
+--- 
+
+# Loading Libraries #
+
+```{r}
+install.packages("caret", repos = "http://cran.us.r-project.org")
+library(caret)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(sqldf)
+
+```
+
+# Loading Dataset #
+
+```{r}
+divyydata <- read.csv("Divvy_processed.csv",sep=",",header=TRUE)
+summary(divyydata)
+str(divyydata)
+# converting data to numeric
+divyydata$trip_duration <- as.numeric(divyydata$trip_duration)
+# removing columns containing NA's
+divyydata <- divyydata[complete.cases(divyydata), ] 
+
+divyydata <- divyydata[!(divyydata$trip_duration > 20000),]
+# splitting date and creating year
+years <- str_split_fixed(divyydata$k_date, "-", 3)
+divyydata$year <- as.factor(years[,3])
+
+unique(divyydata$year)
+rm(years)
+#converting columns to factors
+as.factor.cols <- c("start_station_name", "end_station_name", "k_time",
+          "time_of_day","season","is_holiday","day_of_week")
+divyydata[as.factor.cols] <- lapply(divyydata[as.factor.cols], factor)
+summary(divyydata)
+
+```
+
+### Data Preprocessing ###
+Performing Data Sanity Checks before proceeding with analysis
+```{r}
+divyydata["Month"]<-format(as.Date(divyydata$k_date,format="%m-%d-%y"),"%m")
+summary(divyydata)
+head(divyydata,10)
+#Checking the shape of the dataset
+row=nrow(divyydata)
+col=ncol(divyydata)
+sprintf("The rows and colums are: %s %s",row,col)
+```
+
+```{r}
+#See whether missing values or not
+sapply(divyydata, function(x) sum(is.na(x)))
+```
+
+
+### Exploratory Data Analysis ###
+
+# Ride Length over the years #
+```{r}
+
+df<-sqldf("select avg(trip_duration) as avg_ride,year from divyydata group by year")
+ggplot(data = df)+
+  geom_line(mapping = aes(x=year,y=avg_ride,group = 1))+
+  labs(x="year",y="Average ride length per seconds")+
+  labs(title="Change of average ride length over the years")+
+    theme(plot.title =element_text(hjust = 0.5,size=15), 
+        legend.position = c(.50, .50),
+        legend.justification = c("right", "top"),
+       axis.title = element_text(size=12),
+        axis.text = element_text(size=09))+
+  theme(plot.caption=element_text(size=10))
+```
+
+#### OLD DATASET  PLOTS
+```{r}
+old_divvy <- read.csv("processed_fin.csv",sep=",",header=TRUE)
+
+years <- str_split_fixed(old_divvy$k_date, "-", 3)
+old_divvy$year <- as.factor(years[,3])
+
+unique(old_divvy$year)
+rm(years)
+
+old_divvy$bike_id = as.factor(old_divvy$bike_id)
+
+cols <- c("year", "bike_id")
+old_divvy = old_divvy[cols]
+
+```
+
+# most used bikes per year #
+```{r}
+#bike id graph
+bike_trips = old_divvy[cols] %>% count(year,bike_id)
+yearList = unique(bike_trips$year)
+bike_trips = bike_trips[order(bike_trips$year,bike_trips$n, decreasing = T),]
+
+trip_df <- data.frame(filter(bike_trips,bike_trips$year==13)[1:5,])
+for(val in yearList[2:7]){
+  trip_df = rbind(trip_df,filter(bike_trips,bike_trips$year==val)[1:5,])
+}
+trip_df
+
+ggplot(data = trip_df, aes(x = n, y= bike_id, fill=year) )+
+  geom_bar(stat = "identity")
+
+rm(bike_trips)
+rm(old_divvy)
+```
+
+# Number of trips per year #
+```{r}
+# holiday no of trips graph
+holiday_trip = divyydata %>% count(is_holiday,year)
+
+ggplot(data = holiday_trip, aes(x = year, y= n, fill=is_holiday) )+
+  geom_bar(stat = "identity")+
+  labs(x="year",
+       y="Number of trips")
+
+# holiday trip meaned graph
+holiday_trip_du = divyydata %>% count(is_holiday,k_date,year)
+
+meaned_holi = holiday_trip_du %>%
+    group_by(year,is_holiday) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_holi, aes(x = year, y= Mean, fill=is_holiday) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="year",
+       y="Average number of trips per day")
+
+```
+
+# Average Number of trips(days) per day over year #
+```{r}
+# weekdays trip meaned graph
+weekday_df = divyydata %>% count(day_of_week,k_date,year)
+
+meaned_wd = weekday_df %>%
+    group_by(year,day_of_week) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_wd, aes(x = year, y= Mean, fill=day_of_week) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="year",
+       y="Average number of trips per day")
+```
+
+# Average Number of trips(season) per day over year #
+```{r}
+# season graph
+season_df = divyydata %>% count(season,k_date,year)
+
+meaned_season = season_df %>%
+    group_by(year,season) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_season, aes(x = year, y= Mean, fill=season) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="year",
+       y="Average number of trips per day")
+```
+
+# Number of trips around time over years #
+```{r}
+# time graph
+time_df = divyydata %>% count(k_time,k_date,year)
+
+meaned_time = time_df %>%
+    group_by(year,k_time) %>%
+    dplyr::summarize(Mean = mean(n, na.rm=TRUE))
+
+ggplot(data = meaned_time, aes(x = year, y= Mean, fill=k_time) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="year",
+       y="Average number of trips around k_time")
+
+```
+
+
+
+# Trip duration over years #
+```{r}
+# time graph
+trip_du = divyydata %>%
+    group_by(year) %>%
+    dplyr::summarize(Mean = mean(trip_duration, na.rm=TRUE))
+
+ggplot(data = trip_du, aes(x = year, y= Mean) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="year",
+       y="Average Trip Duration(seconds)")
+
+```
+
+# Trip duration over seasons #
+```{r}
+# time graph
+trip_du = divyydata %>%
+    group_by(season) %>%
+    dplyr::summarize(Mean = mean(trip_duration, na.rm=TRUE))
+
+ggplot(data = trip_du, aes(x = season, y= Mean ) )+
+  geom_bar(stat = "identity",position = position_dodge())+
+  labs(x="season(all years)",
+       y="Average Trip Duration(seconds)")
+
+```
+
+
+#### NUMBER OF TRIPS GROUPED DATASETS
+```{r}
+#load data
+library(ggplot2)
+library(caret)
+library(sqldf)
+options(scipen = 999)
+
+start_df <-  read.csv("start_date_grouped_fin.csv",header=T)
+end_df <-  read.csv("end_date_grouped_fin.csv",header=T)
+str(end_df)
+
+# converting columns to factors
+as.factor.cols <- c("is_holiday", "day_of_week", "season_num", "year","day","month")
+start_df[c("start_station_name",as.factor.cols)] <- lapply(start_df[c("start_station_name",as.factor.cols)], factor)
+end_df[c("end_station_name",as.factor.cols)] <- lapply(end_df[c("end_station_name",as.factor.cols)], factor)
+summary(start_df)
+colSums(is.na(start_df))
+colSums(is.na(end_df))
+```
+
+# overall weather plots #
+```{r}
+
+
+
+par(mfrow = c(2, 1))
+plot(x=start_df$tempC,y=start_df$count,xlab = "Temperature",sub = "Temperature vs no. of trip",ylab = "Number of trips(all data)")
+plot(x=start_df$totalSnow_cm,y=start_df$count,xlab = "Snow",sub = "Snow vs no. of trip",ylab = "Number of trips(all data)")
+
+
+par(mfrow = c(2, 1))
+plot(x=start_df$windSpeedKmph,y=start_df$count,xlab = "Wind",sub = "Wind vs no. of trip",ylab = "Number of trips(all data)")
+plot(x=start_df$cloudcover,y=start_df$count,xlab = "Cloud",sub = "Cloud vs no. of trip",ylab = "Number of trips(all data)")
+
+
+plot(x=start_df$precipMM,y=start_df$count,xlab = "Rain",sub = "Rain vs no. of trip",ylab = "Number of trips(all data)")
+
+par(mfrow = c(2, 1))
+library(dplyr)
+meaned_wd = start_df %>%
+    group_by(k_date) %>%
+    dplyr::summarize(num_trips = mean(count, na.rm=TRUE),temp = mean(tempC, na.rm=TRUE))
+
+plot(x=meaned_wd$temp,y=meaned_wd$num_trips,xlab = "Temperature",sub = "Temperature vs no. of trip",ylab = "Number of trips(per day)")
+
+meaned_wd = start_df %>%
+    group_by(k_date) %>%
+    dplyr::summarize(num_trips = mean(count, na.rm=TRUE),cloud = mean(cloudcover, na.rm=TRUE))
+
+plot(x=meaned_wd$cloud,y=meaned_wd$num_trips,xlab = "Cloud",sub = "Cloud vs no. of trip",ylab = "Number of trips(per day)")
+
+par(mfrow = c(2, 1))
+meaned_wd = start_df %>%
+    group_by(k_date) %>%
+    dplyr::summarize(num_trips = mean(count, na.rm=TRUE),wind = mean(windSpeedKmph, na.rm=TRUE))
+
+plot(x=meaned_wd$wind,y=meaned_wd$num_trips,xlab = "Wind",sub = "Wind vs no. of trip",ylab = "Number of trips(per day)")
+
+
+meaned_wd = start_df %>%
+    group_by(k_date) %>%
+    dplyr::summarize(num_trips = mean(count, na.rm=TRUE),snow = mean(totalSnow_cm, na.rm=TRUE))
+
+
+plot(x=meaned_wd$snow,y=meaned_wd$num_trips,xlab = "Snow",sub = "Snow vs no. of trip",ylab = "Number of trips(per day)")
+par(mfrow = c(2, 1))
+meaned_wd = start_df %>%
+    group_by(k_date) %>%
+    dplyr::summarize(num_trips = mean(count, na.rm=TRUE),rain = mean(precipMM, na.rm=TRUE))
+
+plot(x=meaned_wd$rain,y=meaned_wd$num_trips,xlab = "Rain",sub = "Rain vs no. of trip",ylab = "Number of trips(per day)")
+library(corrplot)
+str(start_df)
+test = start_df[c("uvIndex","tempC","totalSnow_cm","mintempC","maxtempC","windSpeedKmph","precipMM","humidity","visibilityKM","cloudcover","FeelsLikeC")]
+test = scale(test)
+corrplot(test)
+```
+
+# plot top stations based on station #
+```{r}
+# plot top stations based on START station
+top_stations = aggregate(x= start_df$count,
+	          by= list(start_df$start_station_name),
+	          FUN=sum)
+top_stations = top_stations[order(top_stations$x,decreasing=T),]
+top_stations = top_stations[1:20,]
+
+ggplot(data=top_stations, aes(x=Group.1, y=x)) +
+  geom_bar(stat="identity")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5))
+
+# plot top stations based on END station
+top_stations = aggregate(x= end_df$count,
+	          by= list(end_df$end_station_name),
+	          FUN=sum)
+top_stations = top_stations[order(top_stations$x,decreasing=T),]
+top_stations = top_stations[1:20,]
+
+ggplot(data=top_stations, aes(x=Group.1, y=x)) +
+  geom_bar(stat="identity")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5))+
+  labs(x="station names",
+       y="Number of trips ended at")
+```
+
+
+```{r}
+rm(list = ls())
+```
